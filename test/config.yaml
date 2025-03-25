@@ -1,0 +1,14 @@
+initScript: |
+  #!/bin/bash
+
+labels:
+- key: "label-key"
+  value: "label-value"
+
+taints:
+- key: "taint-key"
+  value: "taint-value"
+  effect: "NoSchedule"
+
+registry: "docker.io/"
+imagePullSecret: "default-registry-secret"

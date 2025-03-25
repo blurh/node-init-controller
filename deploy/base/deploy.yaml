@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-ops
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: node-controller
+  name: node-controller
+  namespace: kube-ops
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  - name: metrics
+    port: 8090
+    protocol: TCP
+    targetPort: 8090
+  selector:
+    app: node-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-controller
+  namespace: kube-ops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-controller
+  template:
+    metadata:
+      labels:
+        app: node-controller
+    spec:
+      containers:
+      - command:
+        - /opt/app/controller
+        image: node-controller:latest
+        imagePullPolicy: IfNotPresent
+        name: node-controller
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 300m
+            memory: 512Mi
+        volumeMounts:
+        - name: node-controller-config
+          mountPath: /opt/app/config/
+        - name: webhook-tls
+          mountPath: /tmp/k8s-webhook-server/serving-certs/
+      imagePullSecrets:
+      - name: hwhk-tecdo-registry
+      # serviceAccount: node-controller
+      serviceAccountName: node-controller
+      tolerations:
+      - effect: NoSchedule
+        key: node
+        value: system
+      volumes:
+      - name: node-controller-config
+        configMap:
+          name: node-controller-config
+          defaultMode: 0777
+      - name: webhook-tls
+        secret:
+          defaultMode: 420
+          secretName: node-controller
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node-controller
+  namespace: kube-ops
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUVKRENDQXd5Z0F3SUJBZ0lKQUtPY1YyRkgrZ2k1TUEwR0NTcUdTSWIzRFFFQkN3VUFNQ3N4S1RBbkJnTlYKQkFNTUlHeHJaUzF1YjJSbExXTnZiblJ5YjJ4c1pYSXVhM1ZpWlMxdmNITXVjM1pqTUNBWERUSTBNVEV4TURFMgpNVGMwTjFvWUR6SXdOVEl3TXpJNE1UWXhOelEzV2pCOE1Rc3dDUVlEVlFRR0V3SkRUakVTTUJBR0ExVUVDQXdKClIzVmhibWRrYjI1bk1SSXdFQVlEVlFRSERBbEhkV0Z1WjNwb2IzVXhEREFLQmdOVkJBb01BMjl3Y3pFTU1Bb0cKQTFVRUN3d0RiM0J6TVNrd0p3WURWUVFERENCc2EyVXRibTlrWlMxamIyNTBjbTlzYkdWeUxtdDFZbVV0YjNCegpMbk4yWXpDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBT1hWbUJQU3BKZDMzUzBmCm1LQ3VuMmRhaCszWjFTa3RiTzFhcFhBVk1tWGY3SU0zWlZjUTlzSnhDSGdYZEIzRTR5VTFmandJZE9veFhTb20KS0lKazMvMWc4TVFVOGdmQ3hkMllMbXNYWHdUUnk0Q05UanYzNUVxeUZDWENqWDVNVDJxY0pjMFRUTGd5dUFPNgpya2JoRXlnQ3VmcUxJNEQrVUJjaDh0VUV4TDNxcEowTnAyOWRjMm1lYXFJL0g1S0dLRU1CU0hJY0pTeWpnVjkwCjNOd2FqbnlDUmZUd1dVeFhSRVVra0oyMlNoVksvb1NLMTRBQ3RjNWc0Y0o0M3RnSG9aZW5iNllYQkVLMzgxVGgKdkVqaWZScEY0Q2o4UXJHSDk1bU1RUXQzS2pwV3ZZSTJrMnh5YmQzRlNtQ0MyK2FqYUI5MVVNS0xuUzZOUFBRbwpoNkpSYWljQ0F3RUFBYU9COXpDQjlEQmJCZ05WSFNNRVZEQlNnQlR3MkZGN2xMVVFIM0FzazFGSndxcWlld2dnCkRLRXZwQzB3S3pFcE1DY0dBMVVFQXd3Z2JHdGxMVzV2WkdVdFkyOXVkSEp2Ykd4bGNpNXJkV0psTFc5d2N5NXoKZG1PQ0NRQ2dUQnlzQWxzWjR6QUpCZ05WSFJNRUFqQUFNQXNHQTFVZER3UUVBd0lFTURBZEJnTlZIU1VFRmpBVQpCZ2dyQmdFRkJRY0RBUVlJS3dZQkJRVUhBd0l3WGdZRFZSMFJCRmN3VllJVGJHdGxMVzV2WkdVdFkyOXVkSEp2CmJHeGxjb0ljYkd0bExXNXZaR1V0WTI5dWRISnZiR3hsY2k1cmRXSmxMVzl3YzRJZ2JHdGxMVzV2WkdVdFkyOXUKZEhKdmJHeGxjaTVyZFdKbExXOXdjeTV6ZG1Nd0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFGVzVnZWZmckUvVApGTzN6UDEvWFNlU0pIblhqOS9KTXEvaFRISW5yTE9DRUgzQ1lGTWVKN0JKb0IxZ1VuTThzOVRCOW1DZjlETnUvCnNYUHY5L1BJVDQweWl0YmNhUHlUdVFTMFMweGozZ2hJV213VGIydWtBV0h5MjNRKzI2UytydnpvUm9abWljK2QKeXpmQWZ6bGgraWZSazNxUlBoQ1pRdmxLb2o2c3V6VVNScjJwSDk0elhkS01NdmdGN2ZMNmJsYXk4QUZhUHhrLwpoaTU3WndzQ1d3djhYVVAzeVVmUzNGY3l3c01YMU45R1dnd1lWbUJuKzgxK2JXVkhYNk9NQXlzVW5DMHA3OWVsCjlESjg3aGR2NG1vL2MwZzVZaUNiRC9MU3d5Q2VIbFpjRUVPOXBoUzRjRWwzLzBlbDUxTTQrNHhwN3dmTTJFM3UKK3ZQWGovb252eWs9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcFFJQkFBS0NBUUVBNWRXWUU5S2tsM2ZkTFIrWW9LNmZaMXFIN2RuVktTMXM3VnFsY0JVeVpkL3NnemRsClZ4RDJ3bkVJZUJkMEhjVGpKVFYrUEFoMDZqRmRLaVlvZ21UZi9XRHd4QlR5QjhMRjNaZ3VheGRmQk5ITGdJMU8KTy9ma1NySVVKY0tOZmt4UGFwd2x6Uk5NdURLNEE3cXVSdUVUS0FLNStvc2pnUDVRRnlIeTFRVEV2ZXFrblEybgpiMTF6YVo1cW9qOGZrb1lvUXdGSWNod2xMS09CWDNUYzNCcU9mSUpGOVBCWlRGZEVSU1NRbmJaS0ZVcitoSXJYCmdBSzF6bURod25qZTJBZWhsNmR2cGhjRVFyZnpWT0c4U09KOUdrWGdLUHhDc1lmM21ZeEJDM2NxT2xhOWdqYVQKYkhKdDNjVktZSUxiNXFOb0gzVlF3b3VkTG8wODlDaUhvbEZxSndJREFRQUJBb0lCQUJjTFNuczZWSXhuVlVMUAo5ekt0TDRoaVdGeXR5YVNlVEZ5a0NSQnEzNm05UU82TElGc1JkVnhianZqVGlTM3U3c050VUtIZVN6S3NEbVpLCmV5ZFB5L0dReGJNelVtMGF4MUlIanlmbnFQeEh1THJEOEVNdEFMUElsU0tRRmpYQ212ZmFmaVBJdXBtQlpGZmoKWU5QMGYwSTB1OGIyS25JbGpZdzBPQy9Ka1p4aytNTXBYN25uMkpKd1ZuYWtOZzRmN1RYOHhxSVBGU0QzblFQNApLMFdFWlJ3TUV4bldrdUJuZlhPRUpKaWJxZTNqaWx2TWNUQnNJVGZJWWo1UFRKbktvUHMzZFJKZm4wb1hYMjlvCnN0VGZxTWxUd1U2SnBWU1pRRGVIdm1mR0FDWVEyeEU0dDBEUk8xZG93VG5CMzJGNmJLMGRla0d0WnVJOXdmbTAKaWpuVnRRRUNnWUVBOTlZbTliZmdrdVNUL3ZhRGNwdHBPZkY1VTdnVFZRN1FOY3BnQm1xTURETVNjZGErTmpSYwplcXBNeUoxeU1hOXNxd3c3STRUK2NINnEwMXNsbEFSSTJGM3FNZjlVd2VnQzBqbE0xNVVsOWxpWHJKMmhYRDhzClphSGkrY0QrRE9EcHcwTU1CRVNXekVaMm5FTU4yc2NkTitrY3lZc0hldFZHQ04vUnN6ZmRDS2NDZ1lFQTdXZWsKRkIzUG00TVlwUHI5RDQ2K0RYTTdMclJIa1pYVVR4RGkyQU9najcvZGZobUlqelMzbHJsZEdFUXpVbXptMlRRRwpIQitXT2JSNWpVUXB3L0tEazcyak5IYXgvTWpibzZzR0QyRUIyUW5qdE5hTVJEWXVxRmFsSE1RMFVPTzY3ZTdECllJbzE3cUNKY2ROUWFweFJVSnJ1bjN0NVhBK2UybGEwa1dSRFFvRUNnWUVBelJiSmpNTktNeVMybCtHMWF5elMKU2lIYWpmNGcrVjFWelgyWU14Y09wN1hIeUs2MUh6UDdaNEx3SVgreEZRNmZOWGpjbzRzVjUwL2EyeVp0Rld6cQpQeXFRZUNsY0lVNTJyeks5dFJUMm9rSXoyYU5qK1d0SnVSemJNR1NWbDJDejhXTFZXZDdNajJTc0dLbWdtRy8zCmJPSWFjV244bVpoTjZXQVdMMkhHSnJjQ2dZRUF6bTNpTkVPL3MvK0lQRnlxRXc4Um51eGx0N1MyenBhenA1U04KU3p2TUwzS3NDK3Z6M0dJQWlTVGhHQ3FsWGJTbi9wSElCa2hJL2lBNTJXWTkwczViTHVva3NZZk1PSHdHMEFmMApHd2RFN2c0MVc1ZDdIQXpwQVNObUt0OUlobFdld3lscjVkUUlGVml1YXJWT0pZV0xCMFhRM0FnbmZLOXdkM1lSClNLTWdBUUVDZ1lFQWkyZVVwajhkT1ZJQnM2Uko3bFRFM0FGNjYwdkZpVDhYZVo2NFY2ZCtWSWNPZ0NFQWhsKysKdHhWSnUwOWdsWjQ4Y2ExSVkrNWRNRFZKNURsYWNpanZlQklEdkIyQ3Z2WUVNenNBR3crb2dKeWhMcWdHMjdRVgoxTnJPQXo1ZC9ENXFaZTlFREdRa05PcjdaQVc1WTlJS3V3RXlqbVBDbXBLa2ZrYmFxNUllTU5zPQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: node-controller
+webhooks:
+- name: node-controller.kube-ops.svc
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURLekNDQWhPZ0F3SUJBZ0lKQUtCTUhLd0NXeG5qTUEwR0NTcUdTSWIzRFFFQkN3VUFNQ3N4S1RBbkJnTlYKQkFNTUlHeHJaUzF1YjJSbExXTnZiblJ5YjJ4c1pYSXVhM1ZpWlMxdmNITXVjM1pqTUNBWERUSTBNVEV4TURFMgpNVGMwTjFvWUR6SXdOVEl3TXpJNE1UWXhOelEzV2pBck1Ta3dKd1lEVlFRRERDQnNhMlV0Ym05a1pTMWpiMjUwCmNtOXNiR1Z5TG10MVltVXRiM0J6TG5OMll6Q0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0MKZ2dFQkFNRW9kQ1Y1ZENJWXYvMW9QVzZ6Y2NtdkdRSlFUZ1ZFbjV0UmY3cHNmbTZ1MTdQOGZkaUJFVE4xNDJhSApCc09zT1RyYU9keDZDcmtLUnNxRUNsZ0lDekZDRFZvMUh5czJ0c1dwbDU5V2thWE1TNFRDelQ3MVppYTJkT09XCldPaHQ4cHVVR1AxWmoxb0R3Z1BQMTE3cDBMRVVRcEVDcGxmbXRkMEErS3FuSGlSQkVLUnpselhZR2hiZklHU3QKd3Zvc1lKcVdNRjFjNVEvckZiRkg0RXJEUEYwVUZOT1kwWFVOSGhzc25hVzN4UWJleVVPdkJQODJCSWQ2RGZPcQpLVXFIYU9ETjErZGo1NVU0V3Z5VHRaUVVybnEzeGdvSVJkN0I0eVUvMG5jRC9Pa3RjaXpRWFlnU0piQUhqZzhxCjJnaGlaNGM1K2hJazJaZFV0bUlrVGJTVmswVUNBd0VBQWFOUU1FNHdIUVlEVlIwT0JCWUVGUERZVVh1VXRSQWYKY0N5VFVVbkNxcUo3Q0NBTU1COEdBMVVkSXdRWU1CYUFGUERZVVh1VXRSQWZjQ3lUVVVuQ3FxSjdDQ0FNTUF3RwpBMVVkRXdRRk1BTUJBZjh3RFFZSktvWklodmNOQVFFTEJRQURnZ0VCQUFPb0ZnSXVqNnlqY0lDL0I4OFNHcjJUCmQ1N0lJSXlHYUZiUmN6ZXJIT3RSQWN6ZUM1MjVIcWNzYkU3ci9FRGZlbW5xZ2J5bXh4aXR1dHVvM1RzMGVkTFEKTko1T0ltOGdzNkVSU1hSdk5pbWJDYVQyRkNzWFBpYmFYYitnc1l0OEM4TzdTb3dGeG1FeHZzc3NRa1B1MkJaZQpVUWQyYU4ydmFlT1Y0ME9TTzNlMTFBalhDaGxQRHdlZ2NVdm5pckdtOUtTNDllUWVNQVZSVFF6T21uck1qSEV5Ck43TmVaQ3pQblNrcUY5ZVArbE04RmV6alNwQ0QyUlBjVXRYaWhSdnRXdTV3VW8zcTh1U1Axd2YyMTNndEpZSHYKUCtZVXJBN1hvYWF2VFJzajV1eWQrVURDbjZMUmFvdmFHVExRN2xKbjd0MlE5K0Z3bm9rSkZkblNkc1A1RWh3PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+    service:
+      name: node-controller
+      namespace: kube-ops
+      port: 8443
+      path: "/unschedule"
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["nodes"]
+  failurePolicy: Ignore
+  sideEffects: None
+  admissionReviewVersions: ["v1", "v1beta1"]

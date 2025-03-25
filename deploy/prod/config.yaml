@@ -1,0 +1,34 @@
+labels:
+- key: "node-role.kubernetes.io/worker"
+  value: "true"
+
+taints:
+- key: "node"
+  value: "worker"
+  effect: "NoSchedule"
+
+registry: "docker.io"
+imagePullSecret: "default-registry-secret"
+
+initScript: |
+  #!/bin/bash
+
+  mkdir -p /root/.ssh
+  echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0gltlhDNkAi4o0/qSO/TP5HXZAGhSxBseGd003oeLdbN7lgRzVYiMZYKARnDgM4jXc4ZlQa6u8Peh3QtkR7bPWM/BQUl33cJ6iDUJeDztrneVF+KQDAoGxZagJ33b8b9grCZowcZaS7XDlz02IfI3Esp8Lgq8WVELpYsBOHvBgxKBMNeZgh3BU63CatszghObVocVn72mM63aaf3aYL6Bds0227JdEo40SdKc9u/xK1N4Cydq6Owm5FzsRxxI+co5syG6OBy8ABKNWlAK2LllKIUaShxiepRFp3l9C+AbjWucRgoGRsBP3eZs7PyK9LfXMxT2RcEHnvpVgMlLYqHf 2023-12-06" \
+  >> /root/.ssh/authorized_keys
+  chmod -R 600 /root/.ssh
+
+  # node sysctl
+  echo 'net.nf_conntrack_max = 262144' >> /etc/sysctl.d/controller-sysctl.conf /etc/sysctl.d/
+  service procps force-reload
+
+  # set kubelet unsafe sysctl
+  allowedUnsafeSysctls='"net.core.somaxconn","net.ipv4.tcp_max_syn_backlog"'
+  perl -0777 -i -pe 's/(\nallowedUnsafeSysctls:.*)|\n$/\nallowedUnsafeSysctls: ['$allowedUnsafeSysctls']\n/s' /var/lib/kubelet/config.yaml
+  # set `--housekeeping-interval`
+  perl -i -pe 's/(.*)/\1 --housekeeping-interval=1s/ until /housekeeping-interval/' /etc/default/kubelet
+  systemctl restart kubelet
+
+  # log
+  echo "$(date +%F\ %T) init node done" >> /opt/script/init.log
+

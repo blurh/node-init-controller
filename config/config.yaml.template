@@ -1,0 +1,9 @@
+initScript: |
+    #!/bin/bash
+
+labels: []
+
+taints: []
+
+registry: ""
+imagePullSecret: ""

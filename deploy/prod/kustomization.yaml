@@ -1,0 +1,18 @@
+
+resources:
+- ../base
+
+namespace: kube-ops
+
+images:
+- name: node-controller:latest
+  newName: swr.ap-southeast-1.myhuaweicloud.com/blurh/node-controller
+  newTag: latest
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: node-controller-config
+  files:
+  - config.yaml
